@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VL Live Map — Västmanland</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f14;
+      --surface:   #161a23;
+      --border:    #252a36;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --accent:    #3b82f6;
+      --green:     #22c55e;
+      --red:       #ef4444;
+      --radius:    10px;
+      --mono:      'DM Mono', monospace;
+      --sans:      'DM Sans', sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      overflow: hidden;
+    }
+
+    /* ── Map ── */
+    #map {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    /* ── Header bar ── */
+    #header {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 10px 20px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+      white-space: nowrap;
+    }
+
+    #header .logo {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      color: var(--text);
+    }
+
+    #header .logo span {
+      color: var(--accent);
+    }
+
+    #header .divider {
+      width: 1px;
+      height: 18px;
+      background: var(--border);
+    }
+
+    #vehicle-count {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--green);
+    }
+
+    #status-text {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    /* ── Filter buttons ── */
+    #filters {
+      position: absolute;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      gap: 8px;
+    }
+
+    .filter-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    .filter-btn:hover { border-color: var(--accent); }
+    .filter-btn .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .filter-btn.inactive { opacity: 0.35; }
+
+    #btn-bus   .dot { background: #2563eb; }
+    #btn-train .dot { background: #16a34a; }
+
+    /* ── Info panel (sidebar) ── */
+    #info-panel {
+      position: absolute;
+      top: 50%;
+      right: -320px;
+      transform: translateY(-50%);
+      z-index: 1000;
+      width: 300px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      transition: right 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    #info-panel.visible { right: 16px; }
+
+    #info-panel header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    #info-panel header h2 {
+      font-size: 13px;
+      font-family: var(--mono);
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    #close-panel {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      padding: 0;
+      transition: color 0.15s;
+    }
+    #close-panel:hover { color: var(--text); }
+
+    .info-route-badge {
+      font-family: var(--mono);
+      font-size: 36px;
+      font-weight: 500;
+      color: var(--accent);
+      margin-bottom: 4px;
+      line-height: 1;
+    }
+
+    .info-label {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+      margin-bottom: 20px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .info-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+
+    .info-item .label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+      font-family: var(--mono);
+    }
+
+    .info-item .value {
+      font-size: 14px;
+      font-family: var(--mono);
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .info-item.full { grid-column: 1 / -1; }
+
+    /* ── Attribution override ── */
+    .leaflet-control-attribution {
+      background: rgba(13,15,20,0.75) !important;
+      color: #475569 !important;
+      font-size: 10px;
+    }
+    .leaflet-control-attribution a { color: #64748b !important; }
+
+    /* ── Pulse for live indicator ── */
+    @keyframes pulse {
+      0%   { opacity: 1; }
+      50%  { opacity: 0.4; }
+      100% { opacity: 1; }
+    }
+    .live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      display: inline-block;
+      animation: pulse 2s infinite;
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="map"></div>
+
+  <!-- Header -->
+  <div id="header">
+    <div class="logo">VL <span>LIVE</span></div>
+    <div class="divider"></div>
+    <span class="live-dot"></span>
+    <span id="vehicle-count">—</span>
+    <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">fordon</span>
+    <div class="divider"></div>
+    <span id="status-text">Laddar...</span>
+  </div>
+
+  <!-- Filters -->
+  <div id="filters">
+    <button class="filter-btn" id="btn-bus">
+      <span class="dot"></span> Bussar
+    </button>
+    <button class="filter-btn" id="btn-train">
+      <span class="dot"></span> Tåg
+    </button>
+  </div>
+
+  <!-- Info panel -->
+  <div id="info-panel">
+    <header>
+      <h2>Fordon</h2>
+      <button id="close-panel">✕</button>
+    </header>
+    <div class="info-route-badge" id="info-route">—</div>
+    <div class="info-label" id="info-label">—</div>
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="label">Hastighet</div>
+        <div class="value" id="info-speed">—</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Riktning</div>
+        <div class="value" id="info-bearing">—</div>
+      </div>
+      <div class="info-item full">
+        <div class="label">Status</div>
+        <div class="value" id="info-status">—</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Lat</div>
+        <div class="value" id="info-lat">—</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Lng</div>
+        <div class="value" id="info-lng">—</div>
+      </div>
+      <div class="info-item full">
+        <div class="label">GPS-uppdatering</div>
+        <div class="value" id="info-age">—</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="map.js"></script>
+</body>
+</html>
