@@ -14,8 +14,6 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-
-
 function loadRoutes() {
   try {
     const file = fs.readFileSync(
@@ -26,17 +24,10 @@ function loadRoutes() {
     const lines = file.split('\n');
     const header = lines.shift().split(',');
 
-    const idxRouteId =
-      header.indexOf('route_id');
-
-    const idxShortName =
-      header.indexOf('route_short_name');
-
-    const idxColor =
-      header.indexOf('route_color');
-
-    const idxTextColor =
-      header.indexOf('route_text_color');
+    const idxRouteId = header.indexOf('route_id');
+    const idxShortName = header.indexOf('route_short_name');
+    const idxColor = header.indexOf('route_color');
+    const idxTextColor = header.indexOf('route_text_color');
 
     const routes = {};
 
@@ -45,39 +36,72 @@ function loadRoutes() {
 
       const cols = line.split(',');
 
+      // Bounds checking
+      if (idxRouteId < 0 || idxRouteId >= cols.length ||
+          idxShortName < 0 || idxShortName >= cols.length ||
+          idxColor < 0 || idxColor >= cols.length ||
+          idxTextColor < 0 || idxTextColor >= cols.length) {
+        continue;
+      }
+
       routes[cols[idxRouteId]] = {
-        line:
-          cols[idxShortName],
-
-        color:
-          '#' + (cols[idxColor] || '333333'),
-
-        textColor:
-          '#' + (cols[idxTextColor] || 'FFFFFF'),
+        line: cols[idxShortName],
+        color: '#' + (cols[idxColor] || '333333'),
+        textColor: '#' + (cols[idxTextColor] || 'FFFFFF'),
       };
     }
 
-    console.log(
-      `Loaded ${Object.keys(routes).length} routes`
-    );
-
+    console.log(`Loaded ${Object.keys(routes).length} routes`);
     return routes;
 
   } catch (err) {
-    console.error(
-      'Failed to load routes.txt:',
-      err.message
-    );
-
+    console.error('Failed to load routes.txt:', err.message);
     return {};
   }
 }
 
-const ROUTES = {};
-const TRIPS = {};
+function loadTrips() {
+  try {
+    const file = fs.readFileSync(
+      path.join(__dirname, 'gtfs-vl/trips.txt'),
+      'utf8'
+    );
 
-loadRoutes();
-loadTrips();
+    const lines = file.split('\n');
+    const header = lines.shift().split(',');
+
+    const idxTripId = header.indexOf('trip_id');
+    const idxRouteId = header.indexOf('route_id');
+
+    const trips = {};
+
+    for (const line of lines) {
+      if (!line) continue;
+
+      const cols = line.split(',');
+
+      // Bounds checking
+      if (idxTripId < 0 || idxTripId >= cols.length ||
+          idxRouteId < 0 || idxRouteId >= cols.length) {
+        continue;
+      }
+
+      trips[cols[idxTripId]] = {
+        routeId: cols[idxRouteId],
+      };
+    }
+
+    console.log(`Loaded ${Object.keys(trips).length} trips`);
+    return trips;
+
+  } catch (err) {
+    console.error('Failed to load trips.txt:', err.message);
+    return {};
+  }
+}
+
+const ROUTES = loadRoutes();
+const TRIPS = loadTrips();
 
 // In-memory cache
 let vehicleCache = [];
@@ -126,71 +150,38 @@ async function fetchVehiclePositions() {
 
       if (!pos || !pos.latitude || !pos.longitude) continue;
 
-const routeId =
-  trip && trip.routeId
-    ? trip.routeId
-    : trip && trip.route_id
-    ? trip.route_id
-    : null;
+      const routeId =
+        trip && trip.routeId
+          ? trip.routeId
+          : trip && trip.route_id
+          ? trip.route_id
+          : null;
 
-const cleanRouteId =
-  routeId
-    ? routeId.split('_')[0]
-    : null;
+      const cleanRouteId =
+        routeId
+          ? routeId.split('_')[0]
+          : null;
 
-const routeMeta =
-  ROUTES[cleanRouteId] || {};
+      const routeMeta = ROUTES[cleanRouteId] || {};
 
-vehicles.push({
-  id: entity.id,
-
-  lat: pos.latitude,
-  lng: pos.longitude,
-
-  bearing:
-    pos.bearing || 0,
-
-  speed:
-    pos.speed
-      ? Math.round(pos.speed * 3.6)
-      : null,
-
-  routeId,
-
-  line:
-    routeMeta.line || '?',
-
-  color:
-    routeMeta.color || '#333333',
-
-  textColor:
-    routeMeta.textColor || '#FFFFFF',
-
-  tripId:
-    trip ? trip.tripId : null,
-
-  label:
-    vehicleDesc
-      ? vehicleDesc.label
-      : null,
-
-  licensePlate:
-    vehicleDesc
-      ? vehicleDesc.licensePlate
-      : null,
-
-  timestamp:
-    v.timestamp
-      ? Number(v.timestamp)
-      : null,
-
-  currentStatus:
-    v.currentStatus,
-
-  stopId:
-    v.stopId || null,
-});
-	}
+      vehicles.push({
+        id: entity.id,
+        lat: pos.latitude,
+        lng: pos.longitude,
+        bearing: pos.bearing || 0,
+        speed: pos.speed ? Math.round(pos.speed * 3.6) : null,
+        routeId,
+        line: routeMeta.line || '?',
+        color: routeMeta.color || '#333333',
+        textColor: routeMeta.textColor || '#FFFFFF',
+        tripId: trip ? trip.tripId : null,
+        label: vehicleDesc ? vehicleDesc.label : null,
+        licensePlate: vehicleDesc ? vehicleDesc.licensePlate : null,
+        timestamp: v.timestamp ? Number(v.timestamp) : null,
+        currentStatus: v.currentStatus,
+        stopId: v.stopId || null,
+      });
+    }
 
     vehicleCache = vehicles;
     lastFetched = new Date().toISOString();
