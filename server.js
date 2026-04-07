@@ -22,14 +22,6 @@ function loadRoutes() {
       path.join(__dirname, 'gtfs-vl/routes.txt'),
       'utf8'
     );
-}
-function loadTrips() { 
-	try { 
-		const file = fs.readFileSync( 
-			path.join(__dirname, 'gtfs-vl/trips.txt'),
-				'utf8'
-		 );
-}
 
     const lines = file.split('\n');
     const header = lines.shift().split(',');
