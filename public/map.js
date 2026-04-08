@@ -4,7 +4,7 @@ const POLL_INTERVAL = 15000; // ms
 const VL_CENTER = [59.6099, 16.5448]; // Västerås
 const VL_ZOOM = 11;
 
-// Marker colors by route type (guessed from routeId prefix or fallback)
+// Marker colors by route type
 const COLOR_BUS   = '#2563eb';
 const COLOR_TRAIN = '#16a34a';
 const COLOR_OTHER = '#9333ea';
@@ -35,16 +35,17 @@ function initMap() {
 
 // ── Vehicle icon ────────────────────────────────────────────────────────────
 function makeIcon(vehicle, selected) {
-  const color = getColor(vehicle);
+  const color = vehicle.color || '#333333';
   const bearing = vehicle.bearing || 0;
   const size = selected ? 36 : 28;
+  const lineText = vehicle.line || '?';
 
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 36 36">
       <circle cx="18" cy="18" r="17" fill="${color}" fill-opacity="${selected ? 1 : 0.85}" stroke="white" stroke-width="${selected ? 3 : 1.5}"/>
       <polygon points="18,4 22,16 18,13 14,16" fill="white" opacity="0.9"
         transform="rotate(${bearing}, 18, 18)"/>
-      ${vehicle.routeId ? `<text x="18" y="22" text-anchor="middle" fill="white" font-size="9" font-family="monospace" font-weight="bold">${vehicle.routeId.replace(/[^0-9A-Za-z]/g, '').substring(0, 4)}</text>` : ''}
+      <text x="18" y="22" text-anchor="middle" fill="white" font-size="9" font-family="monospace" font-weight="bold">${lineText}</text>
     </svg>`;
 
   return L.divIcon({
@@ -53,15 +54,6 @@ function makeIcon(vehicle, selected) {
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
-}
-
-function getColor(vehicle) {
-  if (!vehicle.routeId) return COLOR_OTHER;
-  // VL trains tend to have routeId starting with numbers in the 300s/400s
-  // Buses are lower numbers — rough heuristic, can be refined with static GTFS
-  const num = parseInt(vehicle.routeId);
-  if (!isNaN(num) && num > 200) return COLOR_TRAIN;
-  return COLOR_BUS;
 }
 
 // ── Fetch & update ──────────────────────────────────────────────────────────
@@ -111,7 +103,7 @@ function updateMarkers(vehicles) {
   document.getElementById('vehicle-count').textContent = vehicles.length;
 }
 
-// ── Vehicle selection / sidebar ─────────────────────────────────────────────
+// ── Vehicle selection / sidebar ────────────────────────────────���────────────
 function selectVehicle(id) {
   if (selectedId && markers[selectedId]) {
     markers[selectedId].setIcon(makeIcon(vehicleData[selectedId], false));
@@ -136,10 +128,10 @@ function showSidebar(v) {
     2: 'På väg',
   };
 
-  document.getElementById('info-route').textContent   = v.routeId  || '—';
-  document.getElementById('info-label').textContent   = v.label    || v.id;
+  document.getElementById('info-route').textContent   = v.line || '?';
+  document.getElementById('info-label').textContent   = v.label || v.id;
   document.getElementById('info-speed').textContent   = v.speed != null ? `${v.speed} km/h` : '—';
-  document.getElementById('info-bearing').textContent = v.bearing  != null ? `${Math.round(v.bearing)}°` : '—';
+  document.getElementById('info-bearing').textContent = v.bearing != null ? `${Math.round(v.bearing)}°` : '—';
   document.getElementById('info-status').textContent  = statusLabels[v.currentStatus] ?? '—';
   document.getElementById('info-lat').textContent     = v.lat.toFixed(5);
   document.getElementById('info-lng').textContent     = v.lng.toFixed(5);
@@ -183,8 +175,8 @@ function toggleFilter(type) {
   if (type === 'train') showTrains = !showTrains;
 
   for (const [id, v] of Object.entries(vehicleData)) {
-    const color = getColor(v);
-    const visible = (color === COLOR_BUS && showBuses) || (color === COLOR_TRAIN && showTrains) || color === COLOR_OTHER;
+    // Determine visibility based on route type or color
+    const visible = showBuses || showTrains;
     if (visible) {
       if (!markerLayer.hasLayer(markers[id])) markers[id].addTo(markerLayer);
     } else {

@@ -14,6 +14,29 @@ if (!API_KEY) {
   process.exit(1);
 }
 
+// Color palette for different line numbers
+const LINE_COLORS = {
+  1: '#ef4444', 2: '#f97316', 3: '#eab308', 4: '#22c55e', 5: '#06b6d4',
+  6: '#0ea5e9', 7: '#3b82f6', 8: '#8b5cf6', 9: '#d946ef', 10: '#ec4899',
+  11: '#f43f5e', 12: '#d97706', 13: '#84cc16', 14: '#10b981', 15: '#14b8a6',
+  16: '#06b6d4', 17: '#0284c7', 18: '#7c3aed', 19: '#db2777', 20: '#ea580c',
+  25: '#3b82f6', 30: '#06b6d4', 40: '#10b981', 50: '#8b5cf6',
+};
+
+function getLineColor(lineNumber) {
+  if (!lineNumber || lineNumber === '?') return '#64748b';
+  
+  // Check if exact line number exists in palette
+  if (LINE_COLORS[parseInt(lineNumber)]) {
+    return LINE_COLORS[parseInt(lineNumber)];
+  }
+  
+  // Generate color based on line number hash
+  const num = parseInt(lineNumber) || 0;
+  const colors = Object.values(LINE_COLORS);
+  return colors[num % colors.length];
+}
+
 function loadRoutes() {
   try {
     const file = fs.readFileSync(
@@ -36,15 +59,18 @@ function loadRoutes() {
 
       const cols = line.split(',');
 
-      // Only check required columns, color columns are optional
       if (idxRouteId < 0 || idxRouteId >= cols.length ||
           idxShortName < 0 || idxShortName >= cols.length) {
         continue;
       }
 
+      const lineNumber = cols[idxShortName];
+      const hasCustomColor = idxColor >= 0 && cols[idxColor];
+      const color = hasCustomColor ? '#' + cols[idxColor] : getLineColor(lineNumber);
+
       routes[cols[idxRouteId]] = {
-        line: cols[idxShortName] || '?',
-        color: (idxColor >= 0 && cols[idxColor]) ? '#' + cols[idxColor] : '#333333',
+        line: lineNumber || '?',
+        color: color,
         textColor: (idxTextColor >= 0 && cols[idxTextColor]) ? '#' + cols[idxTextColor] : '#FFFFFF',
       };
     }
@@ -171,7 +197,7 @@ async function fetchVehiclePositions() {
         speed: pos.speed ? Math.round(pos.speed * 3.6) : null,
         routeId,
         line: routeMeta.line || '?',
-        color: routeMeta.color || '#333333',
+        color: routeMeta.color || '#64748b',
         textColor: routeMeta.textColor || '#FFFFFF',
         tripId: trip ? trip.tripId : null,
         label: vehicleDesc ? vehicleDesc.label : null,
