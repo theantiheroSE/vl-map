@@ -36,18 +36,16 @@ function loadRoutes() {
 
       const cols = line.split(',');
 
-      // Bounds checking
+      // Only check required columns, color columns are optional
       if (idxRouteId < 0 || idxRouteId >= cols.length ||
-          idxShortName < 0 || idxShortName >= cols.length ||
-          idxColor < 0 || idxColor >= cols.length ||
-          idxTextColor < 0 || idxTextColor >= cols.length) {
+          idxShortName < 0 || idxShortName >= cols.length) {
         continue;
       }
 
       routes[cols[idxRouteId]] = {
-        line: cols[idxShortName],
-        color: '#' + (cols[idxColor] || '333333'),
-        textColor: '#' + (cols[idxTextColor] || 'FFFFFF'),
+        line: cols[idxShortName] || '?',
+        color: (idxColor >= 0 && cols[idxColor]) ? '#' + cols[idxColor] : '#333333',
+        textColor: (idxTextColor >= 0 && cols[idxTextColor]) ? '#' + cols[idxTextColor] : '#FFFFFF',
       };
     }
 
@@ -80,7 +78,6 @@ function loadTrips() {
 
       const cols = line.split(',');
 
-      // Bounds checking
       if (idxTripId < 0 || idxTripId >= cols.length ||
           idxRouteId < 0 || idxRouteId >= cols.length) {
         continue;
@@ -103,14 +100,12 @@ function loadTrips() {
 const ROUTES = loadRoutes();
 const TRIPS = loadTrips();
 
-// In-memory cache
 let vehicleCache = [];
 let lastFetched = null;
 let fetchError = null;
 
 const FEED_URL = `https://opendata.samtrafiken.se/gtfs-rt/vastmanland/VehiclePositions.pb?key=${API_KEY}`;
 
-// Vehicle type labels
 const ROUTE_TYPE_LABELS = {
   0: 'Spårvagn',
   1: 'Tunnelbana',
@@ -150,12 +145,16 @@ async function fetchVehiclePositions() {
 
       if (!pos || !pos.latitude || !pos.longitude) continue;
 
-      const routeId =
+      let routeId =
         trip && trip.routeId
           ? trip.routeId
           : trip && trip.route_id
           ? trip.route_id
           : null;
+
+      if (!routeId && trip && trip.tripId && TRIPS[trip.tripId]) {
+        routeId = TRIPS[trip.tripId].routeId;
+      }
 
       const cleanRouteId =
         routeId
@@ -194,14 +193,11 @@ async function fetchVehiclePositions() {
   }
 }
 
-// Fetch immediately then every 15 seconds
 fetchVehiclePositions();
 setInterval(fetchVehiclePositions, 15000);
 
-// Serve static files
 app.use(express.static('public'));
 
-// API endpoint
 app.get('/api/vehicles', (req, res) => {
   res.json({
     vehicles: vehicleCache,
@@ -211,7 +207,6 @@ app.get('/api/vehicles', (req, res) => {
   });
 });
 
-// Health check
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
